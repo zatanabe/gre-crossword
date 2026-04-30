@@ -61,6 +61,7 @@ export default function App() {
     removeWord,
     toggleKnown,
     updateClue,
+    resetBank,
   } = useWordBank(selectedFile, seedData)
 
   const puzzle = useMemo(() => {
@@ -364,6 +365,7 @@ export default function App() {
           onToggleKnown={toggleKnown}
           onUpdateClue={updateClue}
           onRegenerate={handleRegenerate}
+          onReset={() => { resetBank(); handleRegenerate() }}
           onClose={() => setBankOpen(false)}
         />
       )}

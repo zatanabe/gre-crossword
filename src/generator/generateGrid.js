@@ -35,10 +35,12 @@ export default function generateGrid(words) {
 }
 
 function compareBetter(a, b) {
+  const densityA = a.cells.size / Math.max(gridArea(a.cells), 1)
+  const densityB = b.cells.size / Math.max(gridArea(b.cells), 1)
   if (a.placements.length !== b.placements.length) {
     return a.placements.length > b.placements.length
   }
-  return gridArea(a.cells) < gridArea(b.cells)
+  return densityA > densityB
 }
 
 function gridArea(cells) {
@@ -169,7 +171,8 @@ function scoreCandidates(candidates, word, cells) {
       continue
     }
 
-    let expansionPenalty = 0
+    let newCells = word.length - intersections
+
     if (hasBounds) {
       const dr = c.dir === ACROSS ? 0 : 1
       const dc = c.dir === ACROSS ? 1 : 0
@@ -183,10 +186,18 @@ function scoreCandidates(candidates, word, cells) {
 
       const oldArea = (bounds.maxR - bounds.minR + 1) * (bounds.maxC - bounds.minC + 1)
       const newArea = (newMaxR - newMinR + 1) * (newMaxC - newMinC + 1)
-      expansionPenalty = (newArea - oldArea) / oldArea
+      const addedEmptySpace = (newArea - oldArea) - newCells
+      newCells += Math.max(0, addedEmptySpace)
     }
 
-    c.score = intersections * 10 - expansionPenalty * 5
+    const aspectPenalty = hasBounds ? Math.abs(
+      (Math.max(bounds.maxR, c.row + (c.dir === DOWN ? word.length - 1 : 0)) -
+       Math.min(bounds.minR, c.row)) -
+      (Math.max(bounds.maxC, c.col + (c.dir === ACROSS ? word.length - 1 : 0)) -
+       Math.min(bounds.minC, c.col))
+    ) * 0.3 : 0
+
+    c.score = intersections * 20 - newCells - aspectPenalty
   }
 }
 

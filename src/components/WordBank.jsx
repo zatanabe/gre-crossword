@@ -24,6 +24,7 @@ export default function WordBank({
   onToggleKnown,
   onUpdateClue,
   onRegenerate,
+  onReset,
   onClose,
 }) {
   const [word, setWord] = useState('')
@@ -163,12 +164,18 @@ export default function WordBank({
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-gray-200">
+        <div className="px-4 py-3 border-t border-gray-200 flex gap-2">
           <button
             onClick={onRegenerate}
-            className="w-full bg-black text-white py-2 rounded font-medium text-sm hover:bg-gray-800 transition-colors"
+            className="flex-1 bg-black text-white py-2 rounded font-medium text-sm hover:bg-gray-800 transition-colors"
           >
             New Puzzle
+          </button>
+          <button
+            onClick={onReset}
+            className="text-gray-500 hover:text-red-600 text-xs px-3 py-2 border border-gray-300 rounded transition-colors"
+          >
+            Reset to defaults
           </button>
         </div>
       </div>
