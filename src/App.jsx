@@ -1,29 +1,73 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import generateGrid from './generator/generateGrid.js'
 import Grid from './components/Grid.jsx'
-import WordList from './components/WordList.jsx'
+import ClueList from './components/ClueList.jsx'
 import Controls from './components/Controls.jsx'
 
 const wordModules = import.meta.glob('/words/*.json', { eager: true })
 
-function loadWords(fileName) {
+function loadWordData(fileName) {
   const path = `/words/${fileName}.json`
   const mod = wordModules[path]
-  return mod?.default || mod || []
+  const data = mod?.default || mod || []
+  if (data.length === 0) return { words: [], clueMap: {} }
+
+  if (typeof data[0] === 'string') {
+    return { words: data, clueMap: {} }
+  }
+
+  const words = data.map((d) => d.word)
+  const clueMap = {}
+  for (const d of data) {
+    clueMap[d.word.toUpperCase()] = d.clue
+  }
+  return { words, clueMap }
 }
 
 function createEmptyLetters(grid) {
   return grid.map((row) => row.map(() => ''))
 }
 
+function numberPlacements(placements) {
+  const starts = new Map()
+  for (const p of placements) {
+    const key = `${p.row},${p.col}`
+    if (!starts.has(key)) {
+      starts.set(key, { row: p.row, col: p.col })
+    }
+  }
+
+  const sorted = [...starts.values()].sort(
+    (a, b) => a.row - b.row || a.col - b.col
+  )
+
+  const numberMap = {}
+  sorted.forEach((s, i) => {
+    numberMap[`${s.row},${s.col}`] = i + 1
+  })
+
+  const numbered = placements.map((p) => ({
+    ...p,
+    number: numberMap[`${p.row},${p.col}`],
+  }))
+
+  return { numbered, numberMap }
+}
+
 export default function App() {
   const [selectedFile, setSelectedFile] = useState('gre-sample')
   const [checked, setChecked] = useState(false)
 
-  const puzzle = useMemo(() => {
-    const words = loadWords(selectedFile)
-    return generateGrid(words)
+  const { puzzle, clueMap } = useMemo(() => {
+    const { words, clueMap } = loadWordData(selectedFile)
+    const puzzle = generateGrid(words)
+    return { puzzle, clueMap }
   }, [selectedFile])
+
+  const { numbered: numberedPlacements, numberMap } = useMemo(
+    () => numberPlacements(puzzle.placements),
+    [puzzle.placements]
+  )
 
   const [userLetters, setUserLetters] = useState(() =>
     createEmptyLetters(puzzle.grid)
@@ -55,7 +99,7 @@ export default function App() {
 
   const getWordAt = useCallback(
     (row, col, direction) => {
-      return puzzle.placements.find((p) => {
+      return numberedPlacements.find((p) => {
         if (p.direction !== direction) return false
         const dr = direction === 'across' ? 0 : 1
         const dc = direction === 'across' ? 1 : 0
@@ -65,7 +109,7 @@ export default function App() {
         return false
       })
     },
-    [puzzle.placements]
+    [numberedPlacements]
   )
 
   const handleCellClick = useCallback(
@@ -165,7 +209,7 @@ export default function App() {
         }
       }
     },
-    [activeCell, activeDirection, advanceCell, getWordAt]
+    [activeCell, activeDirection, advanceCell, getWordAt, isGridCell, userLetters]
   )
 
   useEffect(() => {
@@ -186,7 +230,8 @@ export default function App() {
       <div className="mt-4 overflow-auto max-w-full">
         <Grid
           grid={puzzle.grid}
-          placements={puzzle.placements}
+          placements={numberedPlacements}
+          numberMap={numberMap}
           userLetters={userLetters}
           activeCell={activeCell}
           activeDirection={activeDirection}
@@ -196,10 +241,10 @@ export default function App() {
         />
       </div>
 
-      <div className="mt-4 max-w-lg w-full px-2">
-        <WordList
-          placements={puzzle.placements}
-          unplaced={puzzle.unplaced}
+      <div className="mt-4 max-w-2xl w-full px-2">
+        <ClueList
+          placements={numberedPlacements}
+          clueMap={clueMap}
           userLetters={userLetters}
           checked={checked}
         />

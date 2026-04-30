@@ -3,6 +3,7 @@ import { useRef, useEffect } from 'react'
 export default function Grid({
   grid,
   placements,
+  numberMap,
   userLetters,
   activeCell,
   activeDirection,
@@ -11,7 +12,6 @@ export default function Grid({
   onKeyDown,
 }) {
   const inputRef = useRef(null)
-  const gridRef = useRef(null)
 
   useEffect(() => {
     if (activeCell && inputRef.current) {
@@ -46,7 +46,6 @@ export default function Grid({
         }}
       />
       <div
-        ref={gridRef}
         className="inline-grid gap-0"
         style={{
           gridTemplateColumns: `repeat(${grid[0]?.length || 0}, minmax(0, 1fr))`,
@@ -69,13 +68,15 @@ export default function Grid({
             const userChar = userLetters[r]?.[c] || ''
             const isCorrect = checked && userChar === cell.letter
             const isWrong = checked && userChar && userChar !== cell.letter
+            const clueNumber = numberMap[`${r},${c}`]
 
             return (
               <div
                 key={`${r}-${c}`}
                 onClick={() => onCellClick(r, c)}
                 className={[
-                  'w-9 h-9 sm:w-10 sm:h-10 border flex items-center justify-center',
+                  'w-9 h-9 sm:w-10 sm:h-10 border relative',
+                  'flex items-center justify-center',
                   'text-sm sm:text-base font-bold cursor-pointer select-none',
                   'transition-colors duration-100',
                   isActive
@@ -87,6 +88,11 @@ export default function Grid({
                   isWrong && 'ring-2 ring-inset ring-red-400',
                 ].filter(Boolean).join(' ')}
               >
+                {clueNumber && (
+                  <span className="absolute top-0 left-0.5 text-[8px] sm:text-[9px] leading-none text-slate-400 font-normal">
+                    {clueNumber}
+                  </span>
+                )}
                 {userChar}
               </div>
             )

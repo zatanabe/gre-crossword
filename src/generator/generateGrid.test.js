@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import generateGrid from './generateGrid.js'
-import greWords from '../../words/gre-sample.json'
+import greData from '../../words/gre-sample.json'
+
+const greWords = greData.map((d) => d.word)
 
 function assertValidResult(result, inputWords) {
   const allWords = [...result.placements.map((p) => p.word), ...result.unplaced]
