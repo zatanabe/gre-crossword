@@ -312,7 +312,8 @@ export default function App() {
 
       <div className="max-w-6xl mx-auto px-2 sm:px-4 py-4">
         <div className="flex flex-col lg:flex-row gap-6">
-          <div className="flex justify-center lg:justify-start overflow-auto">
+          {/* Grid — capped so clues always have room */}
+          <div className="shrink-0 flex justify-center lg:justify-start overflow-auto">
             <Grid
               grid={puzzle.grid}
               placements={numberedPlacements}
@@ -321,12 +322,14 @@ export default function App() {
               activeCell={activeCell}
               activeDirection={activeDirection}
               checked={checked}
+              maxWidth={520}
               onCellClick={handleCellClick}
               onKeyDown={handleKeyDown}
             />
           </div>
 
-          <div className="hidden lg:block flex-1 min-w-0 max-h-[80vh] overflow-y-auto">
+          {/* Clues — desktop: side panel */}
+          <div className="hidden lg:block flex-1 min-w-[280px] max-h-[80vh] overflow-y-auto">
             <ClueList
               placements={numberedPlacements}
               clueMap={clueMap}
@@ -338,6 +341,7 @@ export default function App() {
           </div>
         </div>
 
+        {/* Clues — mobile: below grid */}
         <div className="lg:hidden mt-4">
           <ClueList
             placements={numberedPlacements}
