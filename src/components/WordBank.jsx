@@ -1,25 +1,55 @@
 import { useState } from 'react'
 
+async function fetchDefinition(word) {
+  try {
+    const res = await fetch(
+      `https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    const meaning = data?.[0]?.meanings?.[0]
+    const def = meaning?.definitions?.[0]?.definition
+    if (!def) return null
+    return def.replace(/\.$/, '')
+  } catch {
+    return null
+  }
+}
+
 export default function WordBank({
   activeWords,
   knownWords,
   onAdd,
   onRemove,
   onToggleKnown,
+  onUpdateClue,
   onRegenerate,
   onClose,
 }) {
   const [word, setWord] = useState('')
   const [clue, setClue] = useState('')
   const [tab, setTab] = useState('active')
+  const [fetching, setFetching] = useState(null)
 
-  const handleAdd = (e) => {
+  const handleAdd = async (e) => {
     e.preventDefault()
     const trimmed = word.trim()
     if (!trimmed) return
-    onAdd(trimmed, clue.trim())
+    const upper = trimmed.toUpperCase().replace(/[^A-Z]/g, '')
+
+    const manualClue = clue.trim()
+    onAdd(trimmed, manualClue)
     setWord('')
     setClue('')
+
+    if (!manualClue) {
+      setFetching(upper)
+      const def = await fetchDefinition(trimmed)
+      setFetching(null)
+      if (def) {
+        onUpdateClue(upper, def)
+      }
+    }
   }
 
   const displayed = tab === 'active' ? activeWords : knownWords
@@ -60,7 +90,7 @@ export default function WordBank({
             type="text"
             value={clue}
             onChange={(e) => setClue(e.target.value)}
-            placeholder="Clue (optional)"
+            placeholder="Clue (auto-generated if left blank)"
             className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-[#5c6ac4]"
           />
         </form>
@@ -105,9 +135,11 @@ export default function WordBank({
             >
               <div className="flex-1 min-w-0">
                 <div className="font-mono text-sm font-bold text-black">{w.word}</div>
-                {w.clue && (
+                {fetching === w.word ? (
+                  <div className="text-xs text-[#5c6ac4] italic">Looking up definition...</div>
+                ) : w.clue ? (
                   <div className="text-xs text-gray-500 truncate">{w.clue}</div>
-                )}
+                ) : null}
               </div>
               <button
                 onClick={() => onToggleKnown(w.word)}

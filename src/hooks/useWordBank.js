@@ -77,6 +77,21 @@ export default function useWordBank(fileName, seedData) {
     [fileName]
   )
 
+  const updateClue = useCallback(
+    (word, clue) => {
+      setBank((prev) => {
+        const next = {
+          words: prev.words.map((w) =>
+            w.word === word ? { ...w, clue } : w
+          ),
+        }
+        saveBank(fileName, next)
+        return next
+      })
+    },
+    [fileName]
+  )
+
   const resetBank = useCallback(() => {
     const fresh = {
       words: seedData.map((d) =>
@@ -107,6 +122,7 @@ export default function useWordBank(fileName, seedData) {
     addWord,
     removeWord,
     toggleKnown,
+    updateClue,
     resetBank,
   }
 }
