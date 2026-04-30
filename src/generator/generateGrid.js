@@ -1,6 +1,6 @@
 const ACROSS = 'across'
 const DOWN = 'down'
-const NUM_ATTEMPTS = 20
+const NUM_ATTEMPTS = 40
 
 export default function generateGrid(words) {
   const upper = words.map((w) => w.toUpperCase())

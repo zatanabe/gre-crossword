@@ -1,5 +1,5 @@
 const WORD_FILES = [
-  { label: 'GRE Sample (25)', value: 'gre-sample' },
+  { label: 'GRE Vocabulary', value: 'gre-sample' },
 ]
 
 export default function Controls({
