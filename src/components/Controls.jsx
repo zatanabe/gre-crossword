@@ -2,7 +2,14 @@ const WORD_FILES = [
   { label: 'GRE Sample (25)', value: 'gre-sample' },
 ]
 
-export default function Controls({ selectedFile, onFileChange, onCheck, onReset, onReveal }) {
+export default function Controls({
+  selectedFile,
+  onFileChange,
+  onCheck,
+  onReset,
+  onReveal,
+  onOpenBank,
+}) {
   return (
     <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-center text-sm">
       <select
@@ -16,6 +23,12 @@ export default function Controls({ selectedFile, onFileChange, onCheck, onReset,
           </option>
         ))}
       </select>
+      <button
+        onClick={onOpenBank}
+        className="text-gray-600 hover:text-black border-b border-gray-400 hover:border-black pb-0.5 transition-colors"
+      >
+        Words
+      </button>
       <button
         onClick={onReveal}
         className="text-gray-600 hover:text-black border-b border-gray-400 hover:border-black pb-0.5 transition-colors"

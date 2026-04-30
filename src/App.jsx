@@ -1,28 +1,18 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import generateGrid from './generator/generateGrid.js'
+import useWordBank from './hooks/useWordBank.js'
 import Grid from './components/Grid.jsx'
 import ClueBar from './components/ClueBar.jsx'
 import ClueList from './components/ClueList.jsx'
 import Controls from './components/Controls.jsx'
+import WordBank from './components/WordBank.jsx'
 
 const wordModules = import.meta.glob('/words/*.json', { eager: true })
 
-function loadWordData(fileName) {
+function loadSeedData(fileName) {
   const path = `/words/${fileName}.json`
   const mod = wordModules[path]
-  const data = mod?.default || mod || []
-  if (data.length === 0) return { words: [], clueMap: {} }
-
-  if (typeof data[0] === 'string') {
-    return { words: data, clueMap: {} }
-  }
-
-  const words = data.map((d) => d.word)
-  const clueMap = {}
-  for (const d of data) {
-    clueMap[d.word.toUpperCase()] = d.clue
-  }
-  return { words, clueMap }
+  return mod?.default || mod || []
 }
 
 function createEmptyLetters(grid) {
@@ -58,12 +48,25 @@ function numberPlacements(placements) {
 export default function App() {
   const [selectedFile, setSelectedFile] = useState('gre-sample')
   const [checked, setChecked] = useState(false)
+  const [bankOpen, setBankOpen] = useState(false)
+  const [puzzleKey, setPuzzleKey] = useState(0)
 
-  const { puzzle, clueMap } = useMemo(() => {
-    const { words, clueMap } = loadWordData(selectedFile)
-    const puzzle = generateGrid(words)
-    return { puzzle, clueMap }
-  }, [selectedFile])
+  const seedData = useMemo(() => loadSeedData(selectedFile), [selectedFile])
+
+  const {
+    activeWords,
+    knownWords,
+    clueMap,
+    addWord,
+    removeWord,
+    toggleKnown,
+  } = useWordBank(selectedFile, seedData)
+
+  const puzzle = useMemo(() => {
+    void puzzleKey
+    const words = activeWords.map((w) => w.word)
+    return generateGrid(words)
+  }, [activeWords, puzzleKey])
 
   const { numbered: numberedPlacements, numberMap } = useMemo(
     () => numberPlacements(puzzle.placements),
@@ -103,11 +106,15 @@ export default function App() {
     setActiveDirection('across')
   }, [])
 
-  const handleReset = useCallback(() => {
+  const resetPuzzleState = useCallback(() => {
     setUserLetters(createEmptyLetters(puzzle.grid))
     setChecked(false)
     setActiveCell(null)
   }, [puzzle.grid])
+
+  const handleReset = useCallback(() => {
+    resetPuzzleState()
+  }, [resetPuzzleState])
 
   const handleCheck = useCallback(() => {
     setChecked(true)
@@ -125,6 +132,13 @@ export default function App() {
       return next
     })
   }, [activeClue])
+
+  const handleRegenerate = useCallback(() => {
+    setPuzzleKey((k) => k + 1)
+    setBankOpen(false)
+    setChecked(false)
+    setActiveCell(null)
+  }, [])
 
   const isGridCell = useCallback(
     (r, c) => puzzle.grid[r]?.[c] != null,
@@ -273,7 +287,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-white text-black">
-      {/* Header */}
       <header className="border-b border-gray-200 px-4 py-3">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <h1 className="text-xl sm:text-2xl font-serif font-bold">The Crossword</h1>
@@ -283,11 +296,11 @@ export default function App() {
             onCheck={handleCheck}
             onReset={handleReset}
             onReveal={handleReveal}
+            onOpenBank={() => setBankOpen(true)}
           />
         </div>
       </header>
 
-      {/* Mobile clue bar */}
       <div className="lg:hidden">
         <ClueBar
           activeClue={activeClue}
@@ -297,10 +310,8 @@ export default function App() {
         />
       </div>
 
-      {/* Main content */}
       <div className="max-w-6xl mx-auto px-2 sm:px-4 py-4">
         <div className="flex flex-col lg:flex-row gap-6">
-          {/* Grid */}
           <div className="flex justify-center lg:justify-start overflow-auto">
             <Grid
               grid={puzzle.grid}
@@ -315,7 +326,6 @@ export default function App() {
             />
           </div>
 
-          {/* Clue list — desktop only */}
           <div className="hidden lg:block flex-1 min-w-0 max-h-[80vh] overflow-y-auto">
             <ClueList
               placements={numberedPlacements}
@@ -328,7 +338,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Clue list — mobile (below grid) */}
         <div className="lg:hidden mt-4">
           <ClueList
             placements={numberedPlacements}
@@ -340,6 +349,18 @@ export default function App() {
           />
         </div>
       </div>
+
+      {bankOpen && (
+        <WordBank
+          activeWords={activeWords}
+          knownWords={knownWords}
+          onAdd={addWord}
+          onRemove={removeWord}
+          onToggleKnown={toggleKnown}
+          onRegenerate={handleRegenerate}
+          onClose={() => setBankOpen(false)}
+        />
+      )}
     </div>
   )
 }
