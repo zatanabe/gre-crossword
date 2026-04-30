@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 
 const STORAGE_PREFIX = 'wordbank-'
 
@@ -88,13 +88,16 @@ export default function useWordBank(fileName, seedData) {
     persist(fresh)
   }, [seedData, persist])
 
-  const activeWords = bank.words.filter((w) => !w.known)
-  const knownWords = bank.words.filter((w) => w.known)
+  const activeWords = useMemo(() => bank.words.filter((w) => !w.known), [bank])
+  const knownWords = useMemo(() => bank.words.filter((w) => w.known), [bank])
 
-  const clueMap = {}
-  for (const w of bank.words) {
-    if (w.clue) clueMap[w.word] = w.clue
-  }
+  const clueMap = useMemo(() => {
+    const map = {}
+    for (const w of bank.words) {
+      if (w.clue) map[w.word] = w.clue
+    }
+    return map
+  }, [bank])
 
   return {
     bank,
