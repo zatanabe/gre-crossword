@@ -1,26 +1,92 @@
 const ACROSS = 'across'
 const DOWN = 'down'
+const NUM_ATTEMPTS = 20
 
 export default function generateGrid(words) {
-  const sorted = [...words]
-    .map((w) => w.toUpperCase())
-    .sort((a, b) => b.length - a.length)
+  const upper = words.map((w) => w.toUpperCase())
 
-  if (sorted.length === 0) {
+  if (upper.length === 0) {
     return { grid: [], placements: [], unplaced: [] }
   }
 
+  let best = null
+
+  for (let attempt = 0; attempt < NUM_ATTEMPTS; attempt++) {
+    const ordered = attempt === 0
+      ? [...upper].sort((a, b) => b.length - a.length)
+      : shuffle([...upper])
+
+    const result = buildPuzzle(ordered)
+
+    if (!best || compareBetter(result, best)) {
+      best = result
+    }
+  }
+
+  const { grid, offsetR, offsetC } = buildGridArray(best.cells)
+
+  const normalizedPlacements = best.placements.map((p) => ({
+    ...p,
+    row: p.row - offsetR,
+    col: p.col - offsetC,
+  }))
+
+  return { grid, placements: normalizedPlacements, unplaced: best.unplaced }
+}
+
+function compareBetter(a, b) {
+  if (a.placements.length !== b.placements.length) {
+    return a.placements.length > b.placements.length
+  }
+  return gridArea(a.cells) < gridArea(b.cells)
+}
+
+function gridArea(cells) {
+  if (cells.size === 0) return 0
+  let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity
+  for (const key of cells.keys()) {
+    const [r, c] = key.split(',').map(Number)
+    minR = Math.min(minR, r)
+    maxR = Math.max(maxR, r)
+    minC = Math.min(minC, c)
+    maxC = Math.max(maxC, c)
+  }
+  return (maxR - minR + 1) * (maxC - minC + 1)
+}
+
+function getBounds(cells) {
+  let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity
+  for (const key of cells.keys()) {
+    const [r, c] = key.split(',').map(Number)
+    minR = Math.min(minR, r)
+    maxR = Math.max(maxR, r)
+    minC = Math.min(minC, c)
+    maxC = Math.max(maxC, c)
+  }
+  return { minR, maxR, minC, maxC }
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
+}
+
+function buildPuzzle(words) {
   const placements = []
   const unplaced = []
   const cells = new Map()
 
-  const first = sorted[0]
+  const first = words[0]
   place(first, 0, -Math.floor(first.length / 2), ACROSS, cells, placements)
 
-  for (let i = 1; i < sorted.length; i++) {
-    const word = sorted[i]
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i]
     const candidates = findCandidates(word, placements, cells)
 
+    scoreCandidates(candidates, word, cells)
     candidates.sort((a, b) => b.score - a.score)
 
     let placed = false
@@ -37,15 +103,7 @@ export default function generateGrid(words) {
     }
   }
 
-  const { grid, offsetR, offsetC } = buildGrid(cells)
-
-  const normalizedPlacements = placements.map((p) => ({
-    ...p,
-    row: p.row - offsetR,
-    col: p.col - offsetC,
-  }))
-
-  return { grid, placements: normalizedPlacements, unplaced }
+  return { placements, unplaced, cells }
 }
 
 function cellKey(r, c) {
@@ -69,6 +127,7 @@ function place(word, row, col, dir, cells, placements) {
 
 function findCandidates(word, placements, cells) {
   const candidates = []
+  const seen = new Set()
 
   for (const p of placements) {
     for (let pi = 0; pi < p.word.length; pi++) {
@@ -86,15 +145,49 @@ function findCandidates(word, placements, cells) {
           col = p.col + pi
         }
 
-        const score = countIntersections(word, row, col, dir, cells)
-        if (score > 0) {
-          candidates.push({ row, col, dir, score })
-        }
+        const key = `${row},${col},${dir}`
+        if (seen.has(key)) continue
+        seen.add(key)
+
+        candidates.push({ row, col, dir, score: 0 })
       }
     }
   }
 
   return candidates
+}
+
+function scoreCandidates(candidates, word, cells) {
+  const hasBounds = cells.size > 0
+  let bounds
+  if (hasBounds) bounds = getBounds(cells)
+
+  for (const c of candidates) {
+    const intersections = countIntersections(word, c.row, c.col, c.dir, cells)
+    if (intersections === 0) {
+      c.score = -Infinity
+      continue
+    }
+
+    let expansionPenalty = 0
+    if (hasBounds) {
+      const dr = c.dir === ACROSS ? 0 : 1
+      const dc = c.dir === ACROSS ? 1 : 0
+      const endR = c.row + dr * (word.length - 1)
+      const endC = c.col + dc * (word.length - 1)
+
+      const newMinR = Math.min(bounds.minR, c.row, endR)
+      const newMaxR = Math.max(bounds.maxR, c.row, endR)
+      const newMinC = Math.min(bounds.minC, c.col, endC)
+      const newMaxC = Math.max(bounds.maxC, c.col, endC)
+
+      const oldArea = (bounds.maxR - bounds.minR + 1) * (bounds.maxC - bounds.minC + 1)
+      const newArea = (newMaxR - newMinR + 1) * (newMaxC - newMinC + 1)
+      expansionPenalty = (newArea - oldArea) / oldArea
+    }
+
+    c.score = intersections * 10 - expansionPenalty * 5
+  }
 }
 
 function countIntersections(word, row, col, dir, cells) {
@@ -141,7 +234,7 @@ function isValid(word, row, col, dir, cells) {
   return true
 }
 
-function buildGrid(cells) {
+function buildGridArray(cells) {
   if (cells.size === 0) return { grid: [], offsetR: 0, offsetC: 0 }
 
   let minR = Infinity, maxR = -Infinity
