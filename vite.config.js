@@ -13,8 +13,8 @@ export default defineConfig({
         name: 'GRE Crossword',
         short_name: 'GREXword',
         description: 'Fill-in crossword puzzles for GRE vocabulary practice',
-        theme_color: '#1e293b',
-        background_color: '#0f172a',
+        theme_color: '#ffffff',
+        background_color: '#ffffff',
         display: 'standalone',
         icons: [
           { src: '/icon-192.svg', sizes: '192x192', type: 'image/svg+xml' },

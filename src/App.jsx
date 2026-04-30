@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import generateGrid from './generator/generateGrid.js'
 import Grid from './components/Grid.jsx'
+import ClueBar from './components/ClueBar.jsx'
 import ClueList from './components/ClueList.jsx'
 import Controls from './components/Controls.jsx'
 
@@ -69,11 +70,31 @@ export default function App() {
     [puzzle.placements]
   )
 
+  const sortedClues = useMemo(() => {
+    return [...numberedPlacements].sort(
+      (a, b) => a.number - b.number || (a.direction === 'across' ? -1 : 1)
+    )
+  }, [numberedPlacements])
+
   const [userLetters, setUserLetters] = useState(() =>
     createEmptyLetters(puzzle.grid)
   )
   const [activeCell, setActiveCell] = useState(null)
   const [activeDirection, setActiveDirection] = useState('across')
+
+  const activeClue = useMemo(() => {
+    if (!activeCell) return null
+    return numberedPlacements.find((p) => {
+      if (p.direction !== activeDirection) return false
+      const dr = p.direction === 'across' ? 0 : 1
+      const dc = p.direction === 'across' ? 1 : 0
+      for (let i = 0; i < p.word.length; i++) {
+        if (p.row + dr * i === activeCell.row && p.col + dc * i === activeCell.col)
+          return true
+      }
+      return false
+    })
+  }, [activeCell, activeDirection, numberedPlacements])
 
   const handleFileChange = useCallback((file) => {
     setSelectedFile(file)
@@ -91,6 +112,19 @@ export default function App() {
   const handleCheck = useCallback(() => {
     setChecked(true)
   }, [])
+
+  const handleReveal = useCallback(() => {
+    if (!activeClue) return
+    setUserLetters((prev) => {
+      const next = prev.map((r) => [...r])
+      const dr = activeClue.direction === 'across' ? 0 : 1
+      const dc = activeClue.direction === 'across' ? 1 : 0
+      for (let i = 0; i < activeClue.word.length; i++) {
+        next[activeClue.row + dr * i][activeClue.col + dc * i] = activeClue.word[i]
+      }
+      return next
+    })
+  }, [activeClue])
 
   const isGridCell = useCallback(
     (r, c) => puzzle.grid[r]?.[c] != null,
@@ -131,6 +165,27 @@ export default function App() {
       setChecked(false)
     },
     [activeCell, activeDirection, isGridCell, getWordAt]
+  )
+
+  const handleClueClick = useCallback((p) => {
+    setActiveCell({ row: p.row, col: p.col })
+    setActiveDirection(p.direction)
+    setChecked(false)
+  }, [])
+
+  const navigateClue = useCallback(
+    (delta) => {
+      if (sortedClues.length === 0) return
+      const idx = activeClue
+        ? sortedClues.findIndex(
+            (c) => c.number === activeClue.number && c.direction === activeClue.direction
+          )
+        : -1
+      const next = sortedClues[(idx + delta + sortedClues.length) % sortedClues.length]
+      setActiveCell({ row: next.row, col: next.col })
+      setActiveDirection(next.direction)
+    },
+    [activeClue, sortedClues]
   )
 
   const advanceCell = useCallback(
@@ -217,37 +272,73 @@ export default function App() {
   }, [puzzle])
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center px-2 py-4 sm:py-8">
-      <h1 className="text-2xl sm:text-3xl font-bold mb-4">GRE Crossword</h1>
+    <div className="min-h-screen bg-white text-black">
+      {/* Header */}
+      <header className="border-b border-gray-200 px-4 py-3">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <h1 className="text-xl sm:text-2xl font-serif font-bold">The Crossword</h1>
+          <Controls
+            selectedFile={selectedFile}
+            onFileChange={handleFileChange}
+            onCheck={handleCheck}
+            onReset={handleReset}
+            onReveal={handleReveal}
+          />
+        </div>
+      </header>
 
-      <Controls
-        selectedFile={selectedFile}
-        onFileChange={handleFileChange}
-        onCheck={handleCheck}
-        onReset={handleReset}
-      />
-
-      <div className="mt-4 overflow-auto max-w-full">
-        <Grid
-          grid={puzzle.grid}
-          placements={numberedPlacements}
-          numberMap={numberMap}
-          userLetters={userLetters}
-          activeCell={activeCell}
-          activeDirection={activeDirection}
-          checked={checked}
-          onCellClick={handleCellClick}
-          onKeyDown={handleKeyDown}
+      {/* Mobile clue bar */}
+      <div className="lg:hidden">
+        <ClueBar
+          activeClue={activeClue}
+          clueMap={clueMap}
+          onPrev={() => navigateClue(-1)}
+          onNext={() => navigateClue(1)}
         />
       </div>
 
-      <div className="mt-4 max-w-2xl w-full px-2">
-        <ClueList
-          placements={numberedPlacements}
-          clueMap={clueMap}
-          userLetters={userLetters}
-          checked={checked}
-        />
+      {/* Main content */}
+      <div className="max-w-6xl mx-auto px-2 sm:px-4 py-4">
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Grid */}
+          <div className="flex justify-center lg:justify-start overflow-auto">
+            <Grid
+              grid={puzzle.grid}
+              placements={numberedPlacements}
+              numberMap={numberMap}
+              userLetters={userLetters}
+              activeCell={activeCell}
+              activeDirection={activeDirection}
+              checked={checked}
+              onCellClick={handleCellClick}
+              onKeyDown={handleKeyDown}
+            />
+          </div>
+
+          {/* Clue list — desktop only */}
+          <div className="hidden lg:block flex-1 min-w-0 max-h-[80vh] overflow-y-auto">
+            <ClueList
+              placements={numberedPlacements}
+              clueMap={clueMap}
+              userLetters={userLetters}
+              checked={checked}
+              activeClue={activeClue}
+              onClueClick={handleClueClick}
+            />
+          </div>
+        </div>
+
+        {/* Clue list — mobile (below grid) */}
+        <div className="lg:hidden mt-4">
+          <ClueList
+            placements={numberedPlacements}
+            clueMap={clueMap}
+            userLetters={userLetters}
+            checked={checked}
+            activeClue={activeClue}
+            onClueClick={handleClueClick}
+          />
+        </div>
       </div>
     </div>
   )
