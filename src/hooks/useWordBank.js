@@ -1,39 +1,87 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { db } from '../firebase.js'
 
 const STORAGE_PREFIX = 'wordbank-'
 
-function loadBank(fileName, seedData) {
+function buildSeedBank(seedData) {
+  return {
+    words: seedData.map((d) =>
+      typeof d === 'string'
+        ? { word: d.toUpperCase(), clue: '', known: false }
+        : { word: d.word.toUpperCase(), clue: d.clue || '', known: false }
+    ),
+  }
+}
+
+function loadLocal(fileName, seedData) {
   const key = STORAGE_PREFIX + fileName
   const stored = localStorage.getItem(key)
   if (stored) {
     try {
       return JSON.parse(stored)
     } catch {
-      // fall through to seed
+      // fall through
     }
   }
-
-  const words = seedData.map((d) =>
-    typeof d === 'string'
-      ? { word: d.toUpperCase(), clue: '', known: false }
-      : { word: d.word.toUpperCase(), clue: d.clue || '', known: false }
-  )
-  return { words }
+  return buildSeedBank(seedData)
 }
 
-function saveBank(fileName, bank) {
+function saveLocal(fileName, bank) {
   localStorage.setItem(STORAGE_PREFIX + fileName, JSON.stringify(bank))
 }
 
-export default function useWordBank(fileName, seedData) {
-  const [bank, setBank] = useState(() => loadBank(fileName, seedData))
+export default function useWordBank(fileName, seedData, user) {
+  const [bank, setBank] = useState(() => loadLocal(fileName, seedData))
+  const [cloudLoaded, setCloudLoaded] = useState(false)
+  const savingRef = useRef(false)
+
+  const firestoreDocRef = user
+    ? doc(db, 'wordbanks', user.uid, 'files', fileName)
+    : null
+
+  useEffect(() => {
+    if (!user) {
+      setCloudLoaded(false)
+      setBank(loadLocal(fileName, seedData))
+      return
+    }
+
+    let cancelled = false
+    const ref = doc(db, 'wordbanks', user.uid, 'files', fileName)
+
+    getDoc(ref).then((snap) => {
+      if (cancelled) return
+      if (snap.exists()) {
+        const data = snap.data()
+        setBank(data)
+        saveLocal(fileName, data)
+      } else {
+        const local = loadLocal(fileName, seedData)
+        setDoc(ref, local).catch(console.error)
+        setBank(local)
+      }
+      setCloudLoaded(true)
+    }).catch((err) => {
+      console.error('Firestore load error:', err)
+      if (!cancelled) setCloudLoaded(true)
+    })
+
+    return () => { cancelled = true }
+  }, [user, fileName, seedData])
 
   const persist = useCallback(
     (next) => {
       setBank(next)
-      saveBank(fileName, next)
+      saveLocal(fileName, next)
+      if (firestoreDocRef && !savingRef.current) {
+        savingRef.current = true
+        setDoc(firestoreDocRef, next).catch(console.error).finally(() => {
+          savingRef.current = false
+        })
+      }
     },
-    [fileName]
+    [fileName, firestoreDocRef]
   )
 
   const addWord = useCallback(
@@ -43,23 +91,25 @@ export default function useWordBank(fileName, seedData) {
       setBank((prev) => {
         if (prev.words.some((w) => w.word === upper)) return prev
         const next = { words: [...prev.words, { word: upper, clue, known: false }] }
-        saveBank(fileName, next)
+        saveLocal(fileName, next)
+        if (firestoreDocRef) setDoc(firestoreDocRef, next).catch(console.error)
         return next
       })
       return true
     },
-    [fileName]
+    [fileName, firestoreDocRef]
   )
 
   const removeWord = useCallback(
     (word) => {
       setBank((prev) => {
         const next = { words: prev.words.filter((w) => w.word !== word) }
-        saveBank(fileName, next)
+        saveLocal(fileName, next)
+        if (firestoreDocRef) setDoc(firestoreDocRef, next).catch(console.error)
         return next
       })
     },
-    [fileName]
+    [fileName, firestoreDocRef]
   )
 
   const toggleKnown = useCallback(
@@ -70,11 +120,12 @@ export default function useWordBank(fileName, seedData) {
             w.word === word ? { ...w, known: !w.known } : w
           ),
         }
-        saveBank(fileName, next)
+        saveLocal(fileName, next)
+        if (firestoreDocRef) setDoc(firestoreDocRef, next).catch(console.error)
         return next
       })
     },
-    [fileName]
+    [fileName, firestoreDocRef]
   )
 
   const updateClue = useCallback(
@@ -85,23 +136,35 @@ export default function useWordBank(fileName, seedData) {
             w.word === word ? { ...w, clue } : w
           ),
         }
-        saveBank(fileName, next)
+        saveLocal(fileName, next)
+        if (firestoreDocRef) setDoc(firestoreDocRef, next).catch(console.error)
         return next
       })
     },
-    [fileName]
+    [fileName, firestoreDocRef]
   )
 
   const resetBank = useCallback(() => {
-    const fresh = {
-      words: seedData.map((d) =>
-        typeof d === 'string'
-          ? { word: d.toUpperCase(), clue: '', known: false }
-          : { word: d.word.toUpperCase(), clue: d.clue || '', known: false }
-      ),
-    }
-    persist(fresh)
-  }, [seedData, persist])
+    setBank((prev) => {
+      const knownSet = new Set(prev.words.filter((w) => w.known).map((w) => w.word))
+      const knownClues = {}
+      for (const w of prev.words) {
+        if (w.known && w.clue) knownClues[w.word] = w.clue
+      }
+
+      const fresh = buildSeedBank(seedData)
+      const next = {
+        words: fresh.words.map((w) =>
+          knownSet.has(w.word)
+            ? { ...w, known: true, clue: knownClues[w.word] || w.clue }
+            : w
+        ),
+      }
+      saveLocal(fileName, next)
+      if (firestoreDocRef) setDoc(firestoreDocRef, next).catch(console.error)
+      return next
+    })
+  }, [seedData, fileName, firestoreDocRef])
 
   const activeWords = useMemo(() => bank.words.filter((w) => !w.known), [bank])
   const knownWords = useMemo(() => bank.words.filter((w) => w.known), [bank])
@@ -124,5 +187,6 @@ export default function useWordBank(fileName, seedData) {
     toggleKnown,
     updateClue,
     resetBank,
+    cloudLoaded,
   }
 }

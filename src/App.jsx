@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import generateGrid from './generator/generateGrid.js'
+import useAuth from './hooks/useAuth.js'
 import useWordBank from './hooks/useWordBank.js'
 import Grid from './components/Grid.jsx'
 import ClueBar from './components/ClueBar.jsx'
@@ -46,6 +47,7 @@ function numberPlacements(placements) {
 }
 
 export default function App() {
+  const { user, loading: authLoading, signIn, logOut } = useAuth()
   const [selectedFile, setSelectedFile] = useState('gre-sample')
   const [checked, setChecked] = useState(false)
   const [bankOpen, setBankOpen] = useState(false)
@@ -62,7 +64,7 @@ export default function App() {
     toggleKnown,
     updateClue,
     resetBank,
-  } = useWordBank(selectedFile, seedData)
+  } = useWordBank(selectedFile, seedData, user)
 
   const puzzle = useMemo(() => {
     void puzzleKey
@@ -292,14 +294,31 @@ export default function App() {
       <header className="border-b border-gray-200 px-4 py-3">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <h1 className="text-xl sm:text-2xl font-serif font-bold">The Crossword</h1>
-          <Controls
-            selectedFile={selectedFile}
-            onFileChange={handleFileChange}
-            onCheck={handleCheck}
-            onReset={handleReset}
-            onReveal={handleReveal}
-            onOpenBank={() => setBankOpen(true)}
-          />
+          <div className="flex items-center gap-3">
+            <Controls
+              selectedFile={selectedFile}
+              onFileChange={handleFileChange}
+              onCheck={handleCheck}
+              onReset={handleReset}
+              onReveal={handleReveal}
+              onOpenBank={() => setBankOpen(true)}
+            />
+            {authLoading ? null : user ? (
+              <button
+                onClick={logOut}
+                className="text-xs text-gray-500 hover:text-black transition-colors whitespace-nowrap"
+              >
+                Sign out
+              </button>
+            ) : (
+              <button
+                onClick={signIn}
+                className="text-xs bg-[#5c6ac4] text-white px-3 py-1.5 rounded hover:bg-[#4b59b3] transition-colors whitespace-nowrap"
+              >
+                Sign in
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
