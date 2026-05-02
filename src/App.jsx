@@ -7,6 +7,7 @@ import ClueBar from './components/ClueBar.jsx'
 import ClueList from './components/ClueList.jsx'
 import Controls from './components/Controls.jsx'
 import WordBank from './components/WordBank.jsx'
+import Flashcards from './components/Flashcards.jsx'
 
 const wordModules = import.meta.glob('/words/*.json', { eager: true })
 
@@ -51,6 +52,7 @@ export default function App() {
   const [selectedFile, setSelectedFile] = useState('gre-sample')
   const [checked, setChecked] = useState(false)
   const [bankOpen, setBankOpen] = useState(false)
+  const [flashcardsOpen, setFlashcardsOpen] = useState(false)
   const [puzzleKey, setPuzzleKey] = useState(0)
 
   const seedData = useMemo(() => loadSeedData(selectedFile), [selectedFile])
@@ -311,6 +313,7 @@ export default function App() {
               onReset={handleReset}
               onReveal={handleReveal}
               onOpenBank={() => setBankOpen(true)}
+              onOpenFlashcards={() => setFlashcardsOpen(true)}
               includeFamiliar={includeFamiliar}
               onToggleFamiliar={() => setIncludeFamiliar((v) => !v)}
             />
@@ -398,6 +401,16 @@ export default function App() {
           onRegenerate={handleRegenerate}
           onReset={() => { resetBank(); handleRegenerate() }}
           onClose={() => setBankOpen(false)}
+        />
+      )}
+
+      {flashcardsOpen && (
+        <Flashcards
+          learningWords={learningWords}
+          familiarWords={familiarWords}
+          masteredWords={masteredWords}
+          onSetStatus={setStatus}
+          onClose={() => setFlashcardsOpen(false)}
         />
       )}
     </div>

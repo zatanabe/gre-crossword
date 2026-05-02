@@ -9,6 +9,7 @@ export default function Controls({
   onReset,
   onReveal,
   onOpenBank,
+  onOpenFlashcards,
   includeFamiliar,
   onToggleFamiliar,
 }) {
@@ -42,6 +43,12 @@ export default function Controls({
         className="text-gray-600 hover:text-black border-b border-gray-400 hover:border-black pb-0.5 transition-colors"
       >
         Words
+      </button>
+      <button
+        onClick={onOpenFlashcards}
+        className="text-gray-600 hover:text-black border-b border-gray-400 hover:border-black pb-0.5 transition-colors"
+      >
+        Flash
       </button>
       <button
         onClick={onReveal}
