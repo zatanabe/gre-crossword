@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 
 const STATUS_COLORS = {
   learning: { border: 'border-red-400', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
@@ -20,12 +20,16 @@ export default function Flashcards({
   familiarWords,
   masteredWords,
   onSetStatus,
+  onUpdateClue,
   onClose,
 }) {
   const [filter, setFilter] = useState('learning')
   const [flipped, setFlipped] = useState(false)
   const [index, setIndex] = useState(0)
   const [deck, setDeck] = useState([])
+  const [editingClue, setEditingClue] = useState(false)
+  const [clueDraft, setClueDraft] = useState('')
+  const clueInputRef = useRef(null)
 
   const sourceWords = useMemo(() => {
     if (filter === 'learning') return learningWords
@@ -49,6 +53,7 @@ export default function Flashcards({
 
   const advance = useCallback(() => {
     setFlipped(false)
+    setEditingClue(false)
     setIndex((i) => {
       if (i + 1 >= deck.length) return i
       return i + 1
@@ -57,6 +62,7 @@ export default function Flashcards({
 
   const goBack = useCallback(() => {
     setFlipped(false)
+    setEditingClue(false)
     setIndex((i) => Math.max(0, i - 1))
   }, [])
 
@@ -165,9 +171,44 @@ export default function Flashcards({
                   <p className="text-center font-mono font-bold text-2xl tracking-wider">
                     {card.word}
                   </p>
-                  <p className="text-center text-gray-500 text-sm mt-3 leading-relaxed">
-                    {card.clue || ''}
-                  </p>
+                  {editingClue ? (
+                    <form
+                      className="w-full mt-3 px-2"
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        onUpdateClue(card.word, clueDraft.trim())
+                        setDeck((d) => d.map((w) => w.word === card.word ? { ...w, clue: clueDraft.trim() } : w))
+                        setEditingClue(false)
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        ref={clueInputRef}
+                        type="text"
+                        value={clueDraft}
+                        onChange={(e) => setClueDraft(e.target.value)}
+                        onBlur={() => {
+                          onUpdateClue(card.word, clueDraft.trim())
+                          setDeck((d) => d.map((w) => w.word === card.word ? { ...w, clue: clueDraft.trim() } : w))
+                          setEditingClue(false)
+                        }}
+                        className="w-full text-sm text-center border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-[#5c6ac4]"
+                        placeholder="Enter a clue..."
+                      />
+                    </form>
+                  ) : (
+                    <p
+                      className="text-center text-gray-500 text-sm mt-3 leading-relaxed cursor-pointer hover:text-gray-700"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setClueDraft(card.clue || '')
+                        setEditingClue(true)
+                        setTimeout(() => clueInputRef.current?.focus(), 0)
+                      }}
+                    >
+                      {card.clue || <span className="italic text-gray-400">Tap to add clue...</span>}
+                    </p>
+                  )}
                 </>
               )}
             </div>

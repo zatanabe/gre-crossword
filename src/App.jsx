@@ -410,6 +410,7 @@ export default function App() {
           familiarWords={familiarWords}
           masteredWords={masteredWords}
           onSetStatus={setStatus}
+          onUpdateClue={updateClue}
           onClose={() => setFlashcardsOpen(false)}
         />
       )}
