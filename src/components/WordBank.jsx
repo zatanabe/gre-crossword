@@ -16,12 +16,59 @@ async function fetchDefinition(word) {
   }
 }
 
+const STATUS_CONFIG = {
+  learning: { label: 'Learning', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-300', dot: 'bg-red-500' },
+  familiar: { label: 'Familiar', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-300', dot: 'bg-amber-500' },
+  mastered: { label: 'Mastered', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-300', dot: 'bg-emerald-500' },
+}
+
+const TABS = [
+  { key: 'learning', label: 'Learning' },
+  { key: 'familiar', label: 'Familiar' },
+  { key: 'mastered', label: 'Mastered' },
+]
+
+function StatusButtons({ word, currentStatus, onSetStatus }) {
+  const next = currentStatus === 'learning' ? 'familiar' : currentStatus === 'familiar' ? 'mastered' : null
+  const prev = currentStatus === 'mastered' ? 'familiar' : currentStatus === 'familiar' ? 'learning' : null
+
+  return (
+    <div className="flex gap-1 shrink-0">
+      {prev && (
+        <button
+          onClick={() => onSetStatus(word, prev)}
+          className={[
+            'text-xs px-2 py-1 rounded border transition-colors',
+            STATUS_CONFIG[prev].border, STATUS_CONFIG[prev].color,
+            `hover:${STATUS_CONFIG[prev].bg}`,
+          ].join(' ')}
+        >
+          {STATUS_CONFIG[prev].label}
+        </button>
+      )}
+      {next && (
+        <button
+          onClick={() => onSetStatus(word, next)}
+          className={[
+            'text-xs px-2 py-1 rounded border transition-colors',
+            STATUS_CONFIG[next].border, STATUS_CONFIG[next].color,
+            `hover:${STATUS_CONFIG[next].bg}`,
+          ].join(' ')}
+        >
+          {STATUS_CONFIG[next].label}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function WordBank({
-  activeWords,
-  knownWords,
+  learningWords,
+  familiarWords,
+  masteredWords,
   onAdd,
   onRemove,
-  onToggleKnown,
+  onSetStatus,
   onUpdateClue,
   onRegenerate,
   onReset,
@@ -29,7 +76,7 @@ export default function WordBank({
 }) {
   const [word, setWord] = useState('')
   const [clue, setClue] = useState('')
-  const [tab, setTab] = useState('active')
+  const [tab, setTab] = useState('learning')
   const [fetching, setFetching] = useState(null)
 
   const handleAdd = async (e) => {
@@ -53,7 +100,21 @@ export default function WordBank({
     }
   }
 
-  const displayed = tab === 'active' ? activeWords : knownWords
+  const counts = {
+    learning: learningWords.length,
+    familiar: familiarWords.length,
+    mastered: masteredWords.length,
+  }
+
+  const displayed = tab === 'learning' ? learningWords
+    : tab === 'familiar' ? familiarWords
+    : masteredWords
+
+  const emptyMessages = {
+    learning: 'No words in learning',
+    familiar: 'No familiar words yet',
+    mastered: 'No mastered words yet',
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
@@ -98,35 +159,28 @@ export default function WordBank({
 
         {/* Tabs */}
         <div className="flex border-b border-gray-200 px-4">
-          <button
-            onClick={() => setTab('active')}
-            className={[
-              'py-2 px-3 text-sm font-medium border-b-2 -mb-px transition-colors',
-              tab === 'active'
-                ? 'border-[#5c6ac4] text-[#5c6ac4]'
-                : 'border-transparent text-gray-500 hover:text-gray-700',
-            ].join(' ')}
-          >
-            Active ({activeWords.length})
-          </button>
-          <button
-            onClick={() => setTab('known')}
-            className={[
-              'py-2 px-3 text-sm font-medium border-b-2 -mb-px transition-colors',
-              tab === 'known'
-                ? 'border-[#5c6ac4] text-[#5c6ac4]'
-                : 'border-transparent text-gray-500 hover:text-gray-700',
-            ].join(' ')}
-          >
-            Known ({knownWords.length})
-          </button>
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={[
+                'py-2 px-3 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5',
+                tab === t.key
+                  ? `${STATUS_CONFIG[t.key].border} ${STATUS_CONFIG[t.key].color}`
+                  : 'border-transparent text-gray-500 hover:text-gray-700',
+              ].join(' ')}
+            >
+              <span className={`inline-block w-2 h-2 rounded-full ${STATUS_CONFIG[t.key].dot}`} />
+              {t.label} ({counts[t.key]})
+            </button>
+          ))}
         </div>
 
         {/* Word list */}
         <div className="flex-1 overflow-y-auto px-4 py-2">
           {displayed.length === 0 && (
             <p className="text-gray-400 text-sm py-4 text-center">
-              {tab === 'active' ? 'No active words' : 'No known words yet'}
+              {emptyMessages[tab]}
             </p>
           )}
           {displayed.map((w) => (
@@ -142,17 +196,11 @@ export default function WordBank({
                   <div className="text-xs text-gray-500 truncate">{w.clue}</div>
                 ) : null}
               </div>
-              <button
-                onClick={() => onToggleKnown(w.word)}
-                className={[
-                  'shrink-0 text-xs px-2 py-1 rounded border transition-colors',
-                  w.known
-                    ? 'border-[#5c6ac4] text-[#5c6ac4] hover:bg-[#5c6ac4]/10'
-                    : 'border-emerald-500 text-emerald-600 hover:bg-emerald-50',
-                ].join(' ')}
-              >
-                {w.known ? 'Reactivate' : 'I know this'}
-              </button>
+              <StatusButtons
+                word={w.word}
+                currentStatus={w.status}
+                onSetStatus={onSetStatus}
+              />
               <button
                 onClick={() => onRemove(w.word)}
                 className="shrink-0 text-gray-300 hover:text-red-500 text-lg leading-none transition-colors"

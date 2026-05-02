@@ -9,6 +9,8 @@ export default function Controls({
   onReset,
   onReveal,
   onOpenBank,
+  includeFamiliar,
+  onToggleFamiliar,
 }) {
   return (
     <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-center text-sm">
@@ -23,6 +25,18 @@ export default function Controls({
           </option>
         ))}
       </select>
+      <button
+        onClick={onToggleFamiliar}
+        className={[
+          'px-2 py-1 rounded border text-xs transition-colors',
+          includeFamiliar
+            ? 'border-amber-400 bg-amber-50 text-amber-700'
+            : 'border-gray-300 text-gray-500 hover:text-gray-700',
+        ].join(' ')}
+        title={includeFamiliar ? 'Familiar words included in puzzle' : 'Click to include familiar words'}
+      >
+        + Familiar
+      </button>
       <button
         onClick={onOpenBank}
         className="text-gray-600 hover:text-black border-b border-gray-400 hover:border-black pb-0.5 transition-colors"

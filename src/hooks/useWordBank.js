@@ -4,12 +4,24 @@ import { db } from '../firebase.js'
 
 const STORAGE_PREFIX = 'wordbank-'
 
+function migrateWord(w) {
+  if ('known' in w && !('status' in w)) {
+    return { word: w.word, clue: w.clue || '', status: w.known ? 'mastered' : 'learning' }
+  }
+  if (!w.status) return { ...w, status: 'learning' }
+  return w
+}
+
+function migrateBank(bank) {
+  return { words: bank.words.map(migrateWord) }
+}
+
 function buildSeedBank(seedData) {
   return {
     words: seedData.map((d) =>
       typeof d === 'string'
-        ? { word: d.toUpperCase(), clue: '', known: false }
-        : { word: d.word.toUpperCase(), clue: d.clue || '', known: false }
+        ? { word: d.toUpperCase(), clue: '', status: 'learning' }
+        : { word: d.word.toUpperCase(), clue: d.clue || '', status: 'learning' }
     ),
   }
 }
@@ -19,7 +31,7 @@ function loadLocal(fileName, seedData) {
   const stored = localStorage.getItem(key)
   if (stored) {
     try {
-      return JSON.parse(stored)
+      return migrateBank(JSON.parse(stored))
     } catch {
       // fall through
     }
@@ -53,7 +65,7 @@ export default function useWordBank(fileName, seedData, user) {
     getDoc(ref).then((snap) => {
       if (cancelled) return
       if (snap.exists()) {
-        const data = snap.data()
+        const data = migrateBank(snap.data())
         setBank(data)
         saveLocal(fileName, data)
       } else {
@@ -90,7 +102,7 @@ export default function useWordBank(fileName, seedData, user) {
       if (!upper) return false
       setBank((prev) => {
         if (prev.words.some((w) => w.word === upper)) return prev
-        const next = { words: [...prev.words, { word: upper, clue, known: false }] }
+        const next = { words: [...prev.words, { word: upper, clue, status: 'learning' }] }
         saveLocal(fileName, next)
         if (firestoreDocRef) setDoc(firestoreDocRef, next).catch(console.error)
         return next
@@ -112,12 +124,12 @@ export default function useWordBank(fileName, seedData, user) {
     [fileName, firestoreDocRef]
   )
 
-  const toggleKnown = useCallback(
-    (word) => {
+  const setStatus = useCallback(
+    (word, status) => {
       setBank((prev) => {
         const next = {
           words: prev.words.map((w) =>
-            w.word === word ? { ...w, known: !w.known } : w
+            w.word === word ? { ...w, status } : w
           ),
         }
         saveLocal(fileName, next)
@@ -146,19 +158,21 @@ export default function useWordBank(fileName, seedData, user) {
 
   const resetBank = useCallback(() => {
     setBank((prev) => {
-      const knownSet = new Set(prev.words.filter((w) => w.known).map((w) => w.word))
-      const knownClues = {}
+      const nonLearning = new Map()
       for (const w of prev.words) {
-        if (w.known && w.clue) knownClues[w.word] = w.clue
+        if (w.status !== 'learning') {
+          nonLearning.set(w.word, { status: w.status, clue: w.clue })
+        }
       }
 
       const fresh = buildSeedBank(seedData)
       const next = {
-        words: fresh.words.map((w) =>
-          knownSet.has(w.word)
-            ? { ...w, known: true, clue: knownClues[w.word] || w.clue }
+        words: fresh.words.map((w) => {
+          const saved = nonLearning.get(w.word)
+          return saved
+            ? { ...w, status: saved.status, clue: saved.clue || w.clue }
             : w
-        ),
+        }),
       }
       saveLocal(fileName, next)
       if (firestoreDocRef) setDoc(firestoreDocRef, next).catch(console.error)
@@ -166,8 +180,9 @@ export default function useWordBank(fileName, seedData, user) {
     })
   }, [seedData, fileName, firestoreDocRef])
 
-  const activeWords = useMemo(() => bank.words.filter((w) => !w.known), [bank])
-  const knownWords = useMemo(() => bank.words.filter((w) => w.known), [bank])
+  const learningWords = useMemo(() => bank.words.filter((w) => w.status === 'learning'), [bank])
+  const familiarWords = useMemo(() => bank.words.filter((w) => w.status === 'familiar'), [bank])
+  const masteredWords = useMemo(() => bank.words.filter((w) => w.status === 'mastered'), [bank])
 
   const clueMap = useMemo(() => {
     const map = {}
@@ -179,12 +194,13 @@ export default function useWordBank(fileName, seedData, user) {
 
   return {
     bank,
-    activeWords,
-    knownWords,
+    learningWords,
+    familiarWords,
+    masteredWords,
     clueMap,
     addWord,
     removeWord,
-    toggleKnown,
+    setStatus,
     updateClue,
     resetBank,
     cloudLoaded,

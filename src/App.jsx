@@ -55,22 +55,31 @@ export default function App() {
 
   const seedData = useMemo(() => loadSeedData(selectedFile), [selectedFile])
 
+  const [includeFamiliar, setIncludeFamiliar] = useState(false)
+
   const {
-    activeWords,
-    knownWords,
+    learningWords,
+    familiarWords,
+    masteredWords,
     clueMap,
     addWord,
     removeWord,
-    toggleKnown,
+    setStatus,
     updateClue,
     resetBank,
   } = useWordBank(selectedFile, seedData, user)
 
+  const puzzleWords = useMemo(() => {
+    const words = [...learningWords]
+    if (includeFamiliar) words.push(...familiarWords)
+    return words
+  }, [learningWords, familiarWords, includeFamiliar])
+
   const puzzle = useMemo(() => {
     void puzzleKey
-    const words = activeWords.map((w) => w.word)
+    const words = puzzleWords.map((w) => w.word)
     return generateGrid(words)
-  }, [activeWords, puzzleKey])
+  }, [puzzleWords, puzzleKey])
 
   const { numbered: numberedPlacements, numberMap } = useMemo(
     () => numberPlacements(puzzle.placements),
@@ -302,6 +311,8 @@ export default function App() {
               onReset={handleReset}
               onReveal={handleReveal}
               onOpenBank={() => setBankOpen(true)}
+              includeFamiliar={includeFamiliar}
+              onToggleFamiliar={() => setIncludeFamiliar((v) => !v)}
             />
             {authLoading ? null : user ? (
               <button
@@ -377,11 +388,12 @@ export default function App() {
 
       {bankOpen && (
         <WordBank
-          activeWords={activeWords}
-          knownWords={knownWords}
+          learningWords={learningWords}
+          familiarWords={familiarWords}
+          masteredWords={masteredWords}
           onAdd={addWord}
           onRemove={removeWord}
-          onToggleKnown={toggleKnown}
+          onSetStatus={setStatus}
           onUpdateClue={updateClue}
           onRegenerate={handleRegenerate}
           onReset={() => { resetBank(); handleRegenerate() }}
