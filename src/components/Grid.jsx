@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 
 export default function Grid({
   grid,
@@ -13,6 +13,19 @@ export default function Grid({
   onKeyDown,
 }) {
   const inputRef = useRef(null)
+  const containerRef = useRef(null)
+  const [containerWidth, setContainerWidth] = useState(maxWidth)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0].contentRect.width
+      if (w > 0) setContainerWidth(w)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     if (activeCell && inputRef.current) {
@@ -24,13 +37,14 @@ export default function Grid({
 
   const cols = grid[0]?.length || 1
   const rows = grid.length || 1
-  const cellSize = Math.floor(Math.min(maxWidth / cols, maxWidth / rows, 36))
+  const effectiveMax = Math.min(containerWidth, maxWidth)
+  const cellSize = Math.floor(Math.min(effectiveMax / cols, effectiveMax / rows, 36))
 
   const fontSize = Math.max(10, cellSize * 0.45)
   const numberSize = Math.max(6, cellSize * 0.24)
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative w-full">
       <input
         ref={inputRef}
         className="absolute opacity-0 w-0 h-0"
