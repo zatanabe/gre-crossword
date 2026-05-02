@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import MathRenderer, { MathText } from './MathRenderer.jsx'
-import greMath from '../data/greMath.js'
 
 const STATUS_COLORS = {
   learning: { border: 'border-red-400', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
@@ -23,6 +22,7 @@ export default function Flashcards({
   masteredWords,
   onSetStatus,
   onUpdateClue,
+  mathBank,
   onClose,
 }) {
   const [deckType, setDeckType] = useState('vocab')
@@ -32,23 +32,37 @@ export default function Flashcards({
   const [deck, setDeck] = useState([])
   const [editingClue, setEditingClue] = useState(false)
   const [clueDraft, setClueDraft] = useState('')
+  const [editingMathFront, setEditingMathFront] = useState(false)
+  const [editingMathBack, setEditingMathBack] = useState(false)
+  const [mathFrontDraft, setMathFrontDraft] = useState('')
+  const [mathBackDraft, setMathBackDraft] = useState('')
   const clueInputRef = useRef(null)
+  const mathFrontRef = useRef(null)
+  const mathBackRef = useRef(null)
 
   const isMath = deckType === 'math'
+  const isEditing = editingClue || editingMathFront || editingMathBack
 
   const sourceWords = useMemo(() => {
-    if (isMath) return greMath.map((c, i) => ({ id: i, ...c }))
+    if (isMath) {
+      if (filter === 'learning') return mathBank.learningCards
+      if (filter === 'familiar') return mathBank.familiarCards
+      if (filter === 'mastered') return mathBank.masteredCards
+      return [...mathBank.learningCards, ...mathBank.familiarCards]
+    }
     if (filter === 'learning') return learningWords
     if (filter === 'familiar') return familiarWords
     if (filter === 'mastered') return masteredWords
     return [...learningWords, ...familiarWords]
-  }, [isMath, filter, learningWords, familiarWords, masteredWords])
+  }, [isMath, filter, learningWords, familiarWords, masteredWords, mathBank])
 
   const reshuffleDeck = useCallback(() => {
     setDeck(shuffle(sourceWords))
     setIndex(0)
     setFlipped(false)
     setEditingClue(false)
+    setEditingMathFront(false)
+    setEditingMathBack(false)
   }, [sourceWords])
 
   useEffect(() => {
@@ -61,6 +75,8 @@ export default function Flashcards({
   const advance = useCallback(() => {
     setFlipped(false)
     setEditingClue(false)
+    setEditingMathFront(false)
+    setEditingMathBack(false)
     setIndex((i) => {
       if (i + 1 >= deck.length) return i
       return i + 1
@@ -70,17 +86,33 @@ export default function Flashcards({
   const goBack = useCallback(() => {
     setFlipped(false)
     setEditingClue(false)
+    setEditingMathFront(false)
+    setEditingMathBack(false)
     setIndex((i) => Math.max(0, i - 1))
   }, [])
 
-  const handleStatusAndAdvance = useCallback((word, status) => {
-    onSetStatus(word, status)
+  const handleStatusAndAdvance = useCallback((identifier, status) => {
+    if (isMath) {
+      mathBank.setStatus(identifier, status)
+    } else {
+      onSetStatus(identifier, status)
+    }
     advance()
-  }, [onSetStatus, advance])
+  }, [isMath, mathBank, onSetStatus, advance])
+
+  const saveMathEdit = useCallback(() => {
+    if (!card) return
+    const front = mathFrontDraft.trim() || card.front
+    const back = mathBackDraft.trim() || card.back
+    mathBank.updateCard(card.id, front, back)
+    setDeck((d) => d.map((c) => c.id === card.id ? { ...c, front, back } : c))
+    setEditingMathFront(false)
+    setEditingMathBack(false)
+  }, [card, mathFrontDraft, mathBackDraft, mathBank])
 
   useEffect(() => {
     function onKey(e) {
-      if (editingClue) return
+      if (isEditing) return
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault()
         setFlipped((f) => !f)
@@ -94,21 +126,28 @@ export default function Flashcards({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [advance, goBack, onClose, editingClue])
+  }, [advance, goBack, onClose, isEditing])
 
-  const vocabFilters = [
+  const statusFilters = [
     { key: 'learning', label: 'Learning' },
     { key: 'familiar', label: 'Familiar' },
     { key: 'mastered', label: 'Mastered' },
     { key: 'all', label: 'All' },
   ]
 
-  const counts = {
-    learning: learningWords.length,
-    familiar: familiarWords.length,
-    mastered: masteredWords.length,
-    all: learningWords.length + familiarWords.length,
-  }
+  const counts = isMath
+    ? {
+        learning: mathBank.learningCards.length,
+        familiar: mathBank.familiarCards.length,
+        mastered: mathBank.masteredCards.length,
+        all: mathBank.learningCards.length + mathBank.familiarCards.length,
+      }
+    : {
+        learning: learningWords.length,
+        familiar: familiarWords.length,
+        mastered: masteredWords.length,
+        all: learningWords.length + familiarWords.length,
+      }
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
@@ -126,7 +165,7 @@ export default function Flashcards({
       {/* Deck selector */}
       <div className="flex border-b border-gray-200 px-4">
         <button
-          onClick={() => setDeckType('vocab')}
+          onClick={() => { setDeckType('vocab'); setFilter('learning') }}
           className={[
             'py-2 px-4 text-sm font-medium border-b-2 -mb-px transition-colors',
             deckType === 'vocab'
@@ -137,7 +176,7 @@ export default function Flashcards({
           Vocabulary
         </button>
         <button
-          onClick={() => setDeckType('math')}
+          onClick={() => { setDeckType('math'); setFilter('learning') }}
           className={[
             'py-2 px-4 text-sm font-medium border-b-2 -mb-px transition-colors',
             deckType === 'math'
@@ -145,39 +184,37 @@ export default function Flashcards({
               : 'border-transparent text-gray-500 hover:text-gray-700',
           ].join(' ')}
         >
-          Math ({greMath.length})
+          Math ({mathBank.allCards.length})
         </button>
       </div>
 
-      {/* Status filter tabs (vocab only) */}
-      {!isMath && (
-        <div className="flex border-b border-gray-200 px-4 overflow-x-auto">
-          {vocabFilters.map((f) => {
-            const colors = STATUS_COLORS[f.key]
-            return (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                className={[
-                  'py-2 px-3 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5',
-                  filter === f.key
-                    ? `${colors ? colors.border : 'border-[#5c6ac4]'} ${colors ? colors.text : 'text-[#5c6ac4]'}`
-                    : 'border-transparent text-gray-500 hover:text-gray-700',
-                ].join(' ')}
-              >
-                {colors && <span className={`inline-block w-2 h-2 rounded-full ${colors.dot}`} />}
-                {f.label} ({counts[f.key]})
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {/* Status filter tabs */}
+      <div className="flex border-b border-gray-200 px-4 overflow-x-auto">
+        {statusFilters.map((f) => {
+          const colors = STATUS_COLORS[f.key]
+          return (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={[
+                'py-2 px-3 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5',
+                filter === f.key
+                  ? `${colors ? colors.border : 'border-[#5c6ac4]'} ${colors ? colors.text : 'text-[#5c6ac4]'}`
+                  : 'border-transparent text-gray-500 hover:text-gray-700',
+              ].join(' ')}
+            >
+              {colors && <span className={`inline-block w-2 h-2 rounded-full ${colors.dot}`} />}
+              {f.label} ({counts[f.key]})
+            </button>
+          )
+        })}
+      </div>
 
       {/* Card area */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-6">
         {total === 0 ? (
           <p className="text-gray-400 text-center">
-            {isMath ? 'No math cards' : 'No words in this category'}
+            {isMath ? 'No math cards in this category' : 'No words in this category'}
           </p>
         ) : card ? (
           <>
@@ -188,28 +225,96 @@ export default function Flashcards({
 
             {/* Card */}
             <div
-              onClick={() => { if (!editingClue) setFlipped((f) => !f) }}
+              onClick={() => { if (!isEditing) setFlipped((f) => !f) }}
               className={[
                 'w-full max-w-md rounded-xl border-2 shadow-lg',
                 'flex flex-col items-center justify-center p-6 cursor-pointer',
                 'transition-all select-none min-h-[200px]',
-                isMath ? 'border-[#5c6ac4]' : (STATUS_COLORS[card.status]?.border || 'border-gray-300'),
+                STATUS_COLORS[card.status]?.border || 'border-gray-300',
                 flipped
-                  ? (isMath ? 'bg-[#5c6ac4]/5' : (STATUS_COLORS[card.status]?.bg || 'bg-gray-50'))
+                  ? (STATUS_COLORS[card.status]?.bg || 'bg-gray-50')
                   : 'bg-white',
               ].join(' ')}
             >
               {isMath ? (
                 !flipped ? (
                   <>
-                    <MathText
-                      text={card.front}
-                      className="text-center text-gray-700 text-lg leading-relaxed"
-                    />
-                    <p className="text-xs text-gray-400 mt-4">Tap to reveal</p>
+                    {editingMathFront ? (
+                      <form
+                        className="w-full px-2"
+                        onSubmit={(e) => { e.preventDefault(); saveMathEdit() }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          ref={mathFrontRef}
+                          type="text"
+                          value={mathFrontDraft}
+                          onChange={(e) => setMathFrontDraft(e.target.value)}
+                          onBlur={saveMathEdit}
+                          className="w-full text-sm text-center border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-[#5c6ac4]"
+                          placeholder="Card front text..."
+                        />
+                        <p className="text-xs text-gray-400 mt-2 text-center">Use $...$ for inline math</p>
+                      </form>
+                    ) : (
+                      <>
+                        <MathText
+                          text={card.front}
+                          className="text-center text-gray-700 text-lg leading-relaxed"
+                        />
+                        <div className="flex items-center gap-3 mt-4">
+                          <p className="text-xs text-gray-400">Tap to reveal</p>
+                          <button
+                            className="text-xs text-gray-400 hover:text-[#5c6ac4] transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setMathFrontDraft(card.front)
+                              setEditingMathFront(true)
+                              setTimeout(() => mathFrontRef.current?.focus(), 0)
+                            }}
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </>
                 ) : (
-                  <MathRenderer tex={card.back} className="text-xl" />
+                  <>
+                    {editingMathBack ? (
+                      <form
+                        className="w-full px-2"
+                        onSubmit={(e) => { e.preventDefault(); saveMathEdit() }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <textarea
+                          ref={mathBackRef}
+                          value={mathBackDraft}
+                          onChange={(e) => setMathBackDraft(e.target.value)}
+                          onBlur={saveMathEdit}
+                          rows={3}
+                          className="w-full text-sm text-center border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-[#5c6ac4] font-mono"
+                          placeholder="LaTeX formula..."
+                        />
+                        <p className="text-xs text-gray-400 mt-2 text-center">LaTeX syntax</p>
+                      </form>
+                    ) : (
+                      <>
+                        <MathRenderer tex={card.back} className="text-xl" />
+                        <button
+                          className="text-xs text-gray-400 hover:text-[#5c6ac4] mt-3 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setMathBackDraft(card.back)
+                            setEditingMathBack(true)
+                            setTimeout(() => mathBackRef.current?.focus(), 0)
+                          }}
+                        >
+                          Edit
+                        </button>
+                      </>
+                    )}
+                  </>
                 )
               ) : !flipped ? (
                 <>
@@ -265,12 +370,12 @@ export default function Flashcards({
               )}
             </div>
 
-            {/* Status buttons (vocab only) */}
-            {flipped && !isMath && (
+            {/* Status buttons */}
+            {flipped && (
               <div className="flex gap-2 mt-6">
                 {card.status !== 'learning' && (
                   <button
-                    onClick={() => handleStatusAndAdvance(card.word, 'learning')}
+                    onClick={() => handleStatusAndAdvance(isMath ? card.id : card.word, 'learning')}
                     className="px-4 py-2 rounded-lg border-2 border-red-300 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors"
                   >
                     Still learning
@@ -278,7 +383,7 @@ export default function Flashcards({
                 )}
                 {card.status !== 'familiar' && (
                   <button
-                    onClick={() => handleStatusAndAdvance(card.word, 'familiar')}
+                    onClick={() => handleStatusAndAdvance(isMath ? card.id : card.word, 'familiar')}
                     className="px-4 py-2 rounded-lg border-2 border-amber-300 text-amber-600 text-sm font-medium hover:bg-amber-50 transition-colors"
                   >
                     Familiar
@@ -286,7 +391,7 @@ export default function Flashcards({
                 )}
                 {card.status !== 'mastered' && (
                   <button
-                    onClick={() => handleStatusAndAdvance(card.word, 'mastered')}
+                    onClick={() => handleStatusAndAdvance(isMath ? card.id : card.word, 'mastered')}
                     className="px-4 py-2 rounded-lg border-2 border-emerald-300 text-emerald-600 text-sm font-medium hover:bg-emerald-50 transition-colors"
                   >
                     Mastered

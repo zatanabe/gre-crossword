@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react'
 import generateGrid from './generator/generateGrid.js'
 import useAuth from './hooks/useAuth.js'
 import useWordBank from './hooks/useWordBank.js'
+import useMathBank from './hooks/useMathBank.js'
 import Grid from './components/Grid.jsx'
 import ClueBar from './components/ClueBar.jsx'
 import ClueList from './components/ClueList.jsx'
@@ -70,6 +71,8 @@ export default function App() {
     updateClue,
     resetBank,
   } = useWordBank(selectedFile, seedData, user)
+
+  const mathBank = useMathBank(user)
 
   const puzzleWords = useMemo(() => {
     const words = [...learningWords]
@@ -411,6 +414,7 @@ export default function App() {
           masteredWords={masteredWords}
           onSetStatus={setStatus}
           onUpdateClue={updateClue}
+          mathBank={mathBank}
           onClose={() => setFlashcardsOpen(false)}
         />
       )}
