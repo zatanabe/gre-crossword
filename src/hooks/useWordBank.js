@@ -180,9 +180,10 @@ export default function useWordBank(fileName, seedData, user) {
     })
   }, [seedData, fileName, firestoreDocRef])
 
-  const learningWords = useMemo(() => bank.words.filter((w) => w.status === 'learning'), [bank])
-  const familiarWords = useMemo(() => bank.words.filter((w) => w.status === 'familiar'), [bank])
-  const masteredWords = useMemo(() => bank.words.filter((w) => w.status === 'mastered'), [bank])
+  const sort = (arr) => [...arr].sort((a, b) => a.word.localeCompare(b.word))
+  const learningWords = useMemo(() => sort(bank.words.filter((w) => w.status === 'learning')), [bank])
+  const familiarWords = useMemo(() => sort(bank.words.filter((w) => w.status === 'familiar')), [bank])
+  const masteredWords = useMemo(() => sort(bank.words.filter((w) => w.status === 'mastered')), [bank])
 
   const clueMap = useMemo(() => {
     const map = {}
