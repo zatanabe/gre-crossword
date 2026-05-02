@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
+
+const ARCHAIC_PATTERNS = /\b(archaic|obsolete|rare|dated|historical)\b/i
+const VERBOSE_THRESHOLD = 120
 
 async function fetchDefinition(word) {
   try {
@@ -7,10 +10,27 @@ async function fetchDefinition(word) {
     )
     if (!res.ok) return null
     const data = await res.json()
-    const meaning = data?.[0]?.meanings?.[0]
-    const def = meaning?.definitions?.[0]?.definition
-    if (!def) return null
-    return def.replace(/\.$/, '')
+
+    const allDefs = []
+    for (const entry of data) {
+      for (const meaning of entry.meanings || []) {
+        for (const d of meaning.definitions || []) {
+          if (d.definition) allDefs.push(d.definition)
+        }
+      }
+    }
+    if (allDefs.length === 0) return null
+
+    const scored = allDefs.map((def) => {
+      let score = 0
+      if (ARCHAIC_PATTERNS.test(def)) score -= 10
+      if (def.length > VERBOSE_THRESHOLD) score -= 3
+      if (def.length < 20) score -= 1
+      return { def, score }
+    })
+    scored.sort((a, b) => b.score - a.score)
+
+    return scored[0].def.replace(/\.$/, '')
   } catch {
     return null
   }
@@ -58,6 +78,55 @@ function StatusButtons({ word, currentStatus, onSetStatus }) {
           {STATUS_CONFIG[next].label}
         </button>
       )}
+    </div>
+  )
+}
+
+function EditableClue({ word, clue, fetching, onUpdateClue }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(clue || '')
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    if (editing && inputRef.current) inputRef.current.focus()
+  }, [editing])
+
+  if (fetching === word) {
+    return <div className="text-xs text-[#5c6ac4] italic">Looking up definition...</div>
+  }
+
+  if (editing) {
+    return (
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          onUpdateClue(word, draft.trim())
+          setEditing(false)
+        }}
+        className="flex gap-1 mt-0.5"
+      >
+        <input
+          ref={inputRef}
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            onUpdateClue(word, draft.trim())
+            setEditing(false)
+          }}
+          className="flex-1 text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:border-[#5c6ac4]"
+        />
+      </form>
+    )
+  }
+
+  return (
+    <div
+      onClick={() => { setDraft(clue || ''); setEditing(true) }}
+      className="text-xs text-gray-500 truncate cursor-pointer hover:text-gray-700"
+      title="Click to edit"
+    >
+      {clue || <span className="italic text-gray-400">Add a clue...</span>}
     </div>
   )
 }
@@ -190,11 +259,12 @@ export default function WordBank({
             >
               <div className="flex-1 min-w-0">
                 <div className="font-mono text-sm font-bold text-black">{w.word}</div>
-                {fetching === w.word ? (
-                  <div className="text-xs text-[#5c6ac4] italic">Looking up definition...</div>
-                ) : w.clue ? (
-                  <div className="text-xs text-gray-500 truncate">{w.clue}</div>
-                ) : null}
+                <EditableClue
+                  word={w.word}
+                  clue={w.clue}
+                  fetching={fetching}
+                  onUpdateClue={onUpdateClue}
+                />
               </div>
               <StatusButtons
                 word={w.word}
