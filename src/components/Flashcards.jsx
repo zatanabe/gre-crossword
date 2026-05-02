@@ -1,4 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import MathRenderer, { MathText } from './MathRenderer.jsx'
+import greMath from '../data/greMath.js'
 
 const STATUS_COLORS = {
   learning: { border: 'border-red-400', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
@@ -23,6 +25,7 @@ export default function Flashcards({
   onUpdateClue,
   onClose,
 }) {
+  const [deckType, setDeckType] = useState('vocab')
   const [filter, setFilter] = useState('learning')
   const [flipped, setFlipped] = useState(false)
   const [index, setIndex] = useState(0)
@@ -31,17 +34,21 @@ export default function Flashcards({
   const [clueDraft, setClueDraft] = useState('')
   const clueInputRef = useRef(null)
 
+  const isMath = deckType === 'math'
+
   const sourceWords = useMemo(() => {
+    if (isMath) return greMath.map((c, i) => ({ id: i, ...c }))
     if (filter === 'learning') return learningWords
     if (filter === 'familiar') return familiarWords
     if (filter === 'mastered') return masteredWords
     return [...learningWords, ...familiarWords]
-  }, [filter, learningWords, familiarWords, masteredWords])
+  }, [isMath, filter, learningWords, familiarWords, masteredWords])
 
   const reshuffleDeck = useCallback(() => {
     setDeck(shuffle(sourceWords))
     setIndex(0)
     setFlipped(false)
+    setEditingClue(false)
   }, [sourceWords])
 
   useEffect(() => {
@@ -73,6 +80,7 @@ export default function Flashcards({
 
   useEffect(() => {
     function onKey(e) {
+      if (editingClue) return
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault()
         setFlipped((f) => !f)
@@ -86,9 +94,9 @@ export default function Flashcards({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [advance, goBack, onClose])
+  }, [advance, goBack, onClose, editingClue])
 
-  const filters = [
+  const vocabFilters = [
     { key: 'learning', label: 'Learning' },
     { key: 'familiar', label: 'Familiar' },
     { key: 'mastered', label: 'Mastered' },
@@ -115,32 +123,62 @@ export default function Flashcards({
         </button>
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex border-b border-gray-200 px-4 overflow-x-auto">
-        {filters.map((f) => {
-          const colors = STATUS_COLORS[f.key]
-          return (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={[
-                'py-2 px-3 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5',
-                filter === f.key
-                  ? `${colors ? colors.border : 'border-[#5c6ac4]'} ${colors ? colors.text : 'text-[#5c6ac4]'}`
-                  : 'border-transparent text-gray-500 hover:text-gray-700',
-              ].join(' ')}
-            >
-              {colors && <span className={`inline-block w-2 h-2 rounded-full ${colors.dot}`} />}
-              {f.label} ({counts[f.key]})
-            </button>
-          )
-        })}
+      {/* Deck selector */}
+      <div className="flex border-b border-gray-200 px-4">
+        <button
+          onClick={() => setDeckType('vocab')}
+          className={[
+            'py-2 px-4 text-sm font-medium border-b-2 -mb-px transition-colors',
+            deckType === 'vocab'
+              ? 'border-[#5c6ac4] text-[#5c6ac4]'
+              : 'border-transparent text-gray-500 hover:text-gray-700',
+          ].join(' ')}
+        >
+          Vocabulary
+        </button>
+        <button
+          onClick={() => setDeckType('math')}
+          className={[
+            'py-2 px-4 text-sm font-medium border-b-2 -mb-px transition-colors',
+            deckType === 'math'
+              ? 'border-[#5c6ac4] text-[#5c6ac4]'
+              : 'border-transparent text-gray-500 hover:text-gray-700',
+          ].join(' ')}
+        >
+          Math ({greMath.length})
+        </button>
       </div>
+
+      {/* Status filter tabs (vocab only) */}
+      {!isMath && (
+        <div className="flex border-b border-gray-200 px-4 overflow-x-auto">
+          {vocabFilters.map((f) => {
+            const colors = STATUS_COLORS[f.key]
+            return (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={[
+                  'py-2 px-3 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5',
+                  filter === f.key
+                    ? `${colors ? colors.border : 'border-[#5c6ac4]'} ${colors ? colors.text : 'text-[#5c6ac4]'}`
+                    : 'border-transparent text-gray-500 hover:text-gray-700',
+                ].join(' ')}
+              >
+                {colors && <span className={`inline-block w-2 h-2 rounded-full ${colors.dot}`} />}
+                {f.label} ({counts[f.key]})
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Card area */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-6">
         {total === 0 ? (
-          <p className="text-gray-400 text-center">No words in this category</p>
+          <p className="text-gray-400 text-center">
+            {isMath ? 'No math cards' : 'No words in this category'}
+          </p>
         ) : card ? (
           <>
             {/* Progress */}
@@ -150,16 +188,30 @@ export default function Flashcards({
 
             {/* Card */}
             <div
-              onClick={() => setFlipped((f) => !f)}
+              onClick={() => { if (!editingClue) setFlipped((f) => !f) }}
               className={[
-                'w-full max-w-md aspect-[3/2] rounded-xl border-2 shadow-lg',
+                'w-full max-w-md rounded-xl border-2 shadow-lg',
                 'flex flex-col items-center justify-center p-6 cursor-pointer',
-                'transition-all select-none',
-                STATUS_COLORS[card.status]?.border || 'border-gray-300',
-                flipped ? (STATUS_COLORS[card.status]?.bg || 'bg-gray-50') : 'bg-white',
+                'transition-all select-none min-h-[200px]',
+                isMath ? 'border-[#5c6ac4]' : (STATUS_COLORS[card.status]?.border || 'border-gray-300'),
+                flipped
+                  ? (isMath ? 'bg-[#5c6ac4]/5' : (STATUS_COLORS[card.status]?.bg || 'bg-gray-50'))
+                  : 'bg-white',
               ].join(' ')}
             >
-              {!flipped ? (
+              {isMath ? (
+                !flipped ? (
+                  <>
+                    <MathText
+                      text={card.front}
+                      className="text-center text-gray-700 text-lg leading-relaxed"
+                    />
+                    <p className="text-xs text-gray-400 mt-4">Tap to reveal</p>
+                  </>
+                ) : (
+                  <MathRenderer tex={card.back} className="text-xl" />
+                )
+              ) : !flipped ? (
                 <>
                   <p className="text-center text-gray-600 text-lg leading-relaxed">
                     {card.clue || 'No clue available'}
@@ -213,8 +265,8 @@ export default function Flashcards({
               )}
             </div>
 
-            {/* Status buttons */}
-            {flipped && (
+            {/* Status buttons (vocab only) */}
+            {flipped && !isMath && (
               <div className="flex gap-2 mt-6">
                 {card.status !== 'learning' && (
                   <button
