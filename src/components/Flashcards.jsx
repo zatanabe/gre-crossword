@@ -56,18 +56,25 @@ export default function Flashcards({
     return [...learningWords, ...familiarWords]
   }, [isMath, filter, learningWords, familiarWords, masteredWords, mathBank])
 
-  const reshuffleDeck = useCallback(() => {
-    setDeck(shuffle(sourceWords))
+  const sourceKey = useMemo(() => {
+    return sourceWords.map((w) => isMath ? String(w.id) : w.word).sort().join('\0')
+  }, [sourceWords, isMath])
+
+  const sourceRef = useRef(sourceWords)
+  sourceRef.current = sourceWords
+
+  const resetDeck = useCallback(() => {
+    setDeck(shuffle(sourceRef.current))
     setIndex(0)
     setFlipped(false)
     setEditingClue(false)
     setEditingMathFront(false)
     setEditingMathBack(false)
-  }, [sourceWords])
+  }, [])
 
   useEffect(() => {
-    reshuffleDeck()
-  }, [reshuffleDeck])
+    resetDeck()
+  }, [sourceKey])
 
   const card = deck[index] || null
   const total = deck.length
@@ -410,7 +417,7 @@ export default function Flashcards({
                 Back
               </button>
               <button
-                onClick={reshuffleDeck}
+                onClick={resetDeck}
                 className="px-4 py-2 text-sm text-gray-500 hover:text-black transition-colors"
               >
                 Reshuffle

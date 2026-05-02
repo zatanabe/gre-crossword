@@ -74,17 +74,17 @@ export default function App() {
 
   const mathBank = useMathBank(user)
 
-  const puzzleWords = useMemo(() => {
-    const words = [...learningWords]
-    if (includeFamiliar) words.push(...familiarWords)
-    return words
+  const puzzleWordKey = useMemo(() => {
+    const names = learningWords.map((w) => w.word)
+    if (includeFamiliar) names.push(...familiarWords.map((w) => w.word))
+    return names.sort().join('\0')
   }, [learningWords, familiarWords, includeFamiliar])
 
   const puzzle = useMemo(() => {
     void puzzleKey
-    const words = puzzleWords.map((w) => w.word)
+    const words = puzzleWordKey ? puzzleWordKey.split('\0') : []
     return generateGrid(words)
-  }, [puzzleWords, puzzleKey])
+  }, [puzzleWordKey, puzzleKey])
 
   const { numbered: numberedPlacements, numberMap } = useMemo(
     () => numberPlacements(puzzle.placements),
@@ -360,7 +360,7 @@ export default function App() {
               activeCell={activeCell}
               activeDirection={activeDirection}
               checked={checked}
-              maxWidth={520}
+              maxWidth={700}
               onCellClick={handleCellClick}
               onKeyDown={handleKeyDown}
             />
