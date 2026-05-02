@@ -23,8 +23,9 @@ function createEmptyLetters(grid) {
 }
 
 function numberPlacements(placements) {
+  const vocab = placements.filter((p) => !p.filler)
   const starts = new Map()
-  for (const p of placements) {
+  for (const p of vocab) {
     const key = `${p.row},${p.col}`
     if (!starts.has(key)) {
       starts.set(key, { row: p.row, col: p.col })
@@ -40,12 +41,38 @@ function numberPlacements(placements) {
     numberMap[`${s.row},${s.col}`] = i + 1
   })
 
-  const numbered = placements.map((p) => ({
+  const numbered = vocab.map((p) => ({
     ...p,
     number: numberMap[`${p.row},${p.col}`],
   }))
 
   return { numbered, numberMap }
+}
+
+function prefillFillers(grid, placements) {
+  const vocabCells = new Set()
+  for (const p of placements) {
+    if (p.filler) continue
+    const dr = p.direction === 'across' ? 0 : 1
+    const dc = p.direction === 'across' ? 1 : 0
+    for (let i = 0; i < p.word.length; i++) {
+      vocabCells.add(`${p.row + dr * i},${p.col + dc * i}`)
+    }
+  }
+  const letters = grid.map((row) => row.map(() => ''))
+  for (const p of placements) {
+    if (!p.filler) continue
+    const dr = p.direction === 'across' ? 0 : 1
+    const dc = p.direction === 'across' ? 1 : 0
+    for (let i = 0; i < p.word.length; i++) {
+      const r = p.row + dr * i
+      const c = p.col + dc * i
+      if (!vocabCells.has(`${r},${c}`)) {
+        letters[r][c] = p.word[i]
+      }
+    }
+  }
+  return letters
 }
 
 export default function App() {
@@ -91,6 +118,25 @@ export default function App() {
     [puzzle.placements]
   )
 
+  const fillerCells = useMemo(() => {
+    const vocabCells = new Set()
+    const allFiller = new Set()
+    for (const p of puzzle.placements) {
+      const dr = p.direction === 'across' ? 0 : 1
+      const dc = p.direction === 'across' ? 1 : 0
+      for (let i = 0; i < p.word.length; i++) {
+        const key = `${p.row + dr * i},${p.col + dc * i}`
+        if (p.filler) allFiller.add(key)
+        else vocabCells.add(key)
+      }
+    }
+    const set = new Set()
+    for (const key of allFiller) {
+      if (!vocabCells.has(key)) set.add(key)
+    }
+    return set
+  }, [puzzle.placements])
+
   const sortedClues = useMemo(() => {
     return [...numberedPlacements].sort(
       (a, b) => a.number - b.number || (a.direction === 'across' ? -1 : 1)
@@ -98,7 +144,7 @@ export default function App() {
   }, [numberedPlacements])
 
   const [userLetters, setUserLetters] = useState(() =>
-    createEmptyLetters(puzzle.grid)
+    prefillFillers(puzzle.grid, puzzle.placements)
   )
   const [activeCell, setActiveCell] = useState(null)
   const [activeDirection, setActiveDirection] = useState('across')
@@ -125,10 +171,10 @@ export default function App() {
   }, [])
 
   const resetPuzzleState = useCallback(() => {
-    setUserLetters(createEmptyLetters(puzzle.grid))
+    setUserLetters(prefillFillers(puzzle.grid, puzzle.placements))
     setChecked(false)
     setActiveCell(null)
-  }, [puzzle.grid])
+  }, [puzzle.grid, puzzle.placements])
 
   const handleReset = useCallback(() => {
     resetPuzzleState()
@@ -225,13 +271,17 @@ export default function App() {
       const dr = dir === 'across' ? 0 : 1
       const dc = dir === 'across' ? 1 : 0
       const step = reverse ? -1 : 1
-      const nr = row + dr * step
-      const nc = col + dc * step
+      let nr = row + dr * step
+      let nc = col + dc * step
+      while (isGridCell(nr, nc) && fillerCells.has(`${nr},${nc}`)) {
+        nr += dr * step
+        nc += dc * step
+      }
       if (isGridCell(nr, nc)) {
         setActiveCell({ row: nr, col: nc })
       }
     },
-    [isGridCell]
+    [isGridCell, fillerCells]
   )
 
   const handleKeyDown = useCallback(
@@ -300,7 +350,7 @@ export default function App() {
   )
 
   useEffect(() => {
-    setUserLetters(createEmptyLetters(puzzle.grid))
+    setUserLetters(prefillFillers(puzzle.grid, puzzle.placements))
   }, [puzzle])
 
   return (
@@ -360,6 +410,7 @@ export default function App() {
               activeCell={activeCell}
               activeDirection={activeDirection}
               checked={checked}
+              fillerCells={fillerCells}
               maxWidth={700}
               onCellClick={handleCellClick}
               onKeyDown={handleKeyDown}

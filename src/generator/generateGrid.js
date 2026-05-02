@@ -205,7 +205,7 @@ function tryFillRun(fixed, rangeStart, rangeEnd, dir, cells, placements, placedS
       const candidate = findGapWord(letters, len, placedSet)
       if (candidate && isValid(candidate, r, c, dir, cells) &&
           wouldFit(candidate, r, c, dir, bounds)) {
-        place(candidate, r, c, dir, cells, placements)
+        placeFiller(candidate, r, c, dir, cells, placements)
         placedSet.add(candidate)
       }
     }
@@ -292,7 +292,22 @@ function place(word, row, col, dir, cells, placements) {
       cells.set(key, { letter: word[i], count: 1 })
     }
   }
-  placements.push({ word, row, col, direction: dir })
+  placements.push({ word, row, col, direction: dir, filler: false })
+}
+
+function placeFiller(word, row, col, dir, cells, placements) {
+  for (let i = 0; i < word.length; i++) {
+    const r = dir === ACROSS ? row : row + i
+    const c = dir === ACROSS ? col + i : col
+    const key = cellKey(r, c)
+    const existing = cells.get(key)
+    if (existing) {
+      existing.count++
+    } else {
+      cells.set(key, { letter: word[i], count: 1 })
+    }
+  }
+  placements.push({ word, row, col, direction: dir, filler: true })
 }
 
 function findCandidates(word, placements, cells) {

@@ -8,6 +8,7 @@ export default function Grid({
   activeCell,
   activeDirection,
   checked,
+  fillerCells,
   maxWidth,
   onCellClick,
   onKeyDown,
@@ -85,26 +86,27 @@ export default function Grid({
               )
             }
 
+            const isFiller = fillerCells?.has(`${r},${c}`)
             const isActive =
-              activeCell && activeCell.row === r && activeCell.col === c
-            const isInWord = activeWordCells.has(`${r},${c}`)
+              !isFiller && activeCell && activeCell.row === r && activeCell.col === c
+            const isInWord = !isFiller && activeWordCells.has(`${r},${c}`)
             const userChar = userLetters[r]?.[c] || ''
-            const isCorrect = checked && userChar === cell.letter
-            const isWrong = checked && userChar && userChar !== cell.letter
+            const isCorrect = !isFiller && checked && userChar === cell.letter
+            const isWrong = !isFiller && checked && userChar && userChar !== cell.letter
             const clueNumber = numberMap[`${r},${c}`]
 
-            let bg = 'bg-white'
+            let bg = isFiller ? 'bg-gray-100' : 'bg-white'
             if (isActive) bg = 'bg-[#ffda00]'
             else if (isInWord) bg = 'bg-[#a7d8ff]'
 
             return (
               <div
                 key={`${r}-${c}`}
-                onClick={() => onCellClick(r, c)}
+                onClick={() => !isFiller && onCellClick(r, c)}
                 className={[
                   'border-[0.5px] border-[#3a3a3a] relative',
                   'flex items-center justify-center',
-                  'font-bold cursor-pointer select-none',
+                  isFiller ? 'select-none' : 'font-bold cursor-pointer select-none',
                   bg,
                   isCorrect && 'ring-2 ring-inset ring-emerald-500',
                   isWrong && 'ring-2 ring-inset ring-red-500',
@@ -119,7 +121,10 @@ export default function Grid({
                     {clueNumber}
                   </span>
                 )}
-                <span className="font-semibold text-black" style={{ fontSize }}>
+                <span
+                  className={isFiller ? 'font-semibold text-gray-400' : 'font-semibold text-black'}
+                  style={{ fontSize }}
+                >
                   {userChar}
                 </span>
               </div>
