@@ -1,9 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
+import greDefinitions from '../data/greDefinitions.js'
 
 const ARCHAIC_PATTERNS = /\b(archaic|obsolete|rare|dated|historical)\b/i
 const VERBOSE_THRESHOLD = 120
 
 async function fetchDefinition(word) {
+  const upper = word.toUpperCase().replace(/[^A-Z]/g, '')
+  const greDef = greDefinitions[upper]
+  if (greDef) return greDef
+
   try {
     const res = await fetch(
       `https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`
